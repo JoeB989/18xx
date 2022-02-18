@@ -43,6 +43,11 @@ module View
         @num_players.times do |index|
           n = index + 1
           inputs << render_input('', id: "player_#{n}", attrs: { value: "Player #{n}" })
+
+          allow_bots = @optional_rules.include?(:allow_bots)
+          bot_vis = allow_bots ? 'visible' : 'hidden'
+          inputs << render_input('Bot', id: "is_bot_#{n}", type: :checkbox,
+                                        container_style: { margin: '0 2.5rem 0 -5rem', visibility: bot_vis.to_s })
         end
         inputs << render_game_info
       when :json
@@ -364,6 +369,22 @@ module View
         .values
         .map { |name| name.gsub(/\s+/, ' ').strip }
 
+      players = []
+      bots = []
+      is_bot = Hash.new
+      game_params.each do |k, v|
+        if k.start_with?('player_')
+          name = v.gsub(/\s+/, ' ').strip
+          bot_key = 'is_bot_' + k[7,2]
+          if game_params[bot_key]
+            #name += ' (bot)'
+            bots << name 
+            is_bot[name] = true
+          end
+          players << name
+        end
+      end
+
       return store(:flash_opts, 'Cannot have duplicate player names') if players.uniq.size != players.size
 
       if @mode == :json
@@ -382,7 +403,8 @@ module View
 
       create_hotseat(
         id: Time.now.to_i,
-        players: players.map { |name| { name: name } },
+        players: players.map { |name| { name: name, is_bot: is_bot[name] } },
+        bots: bots,
         title: game_params[:title],
         description: game_params[:description],
         max_players: game_params[:max_players],

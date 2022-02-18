@@ -15,12 +15,13 @@ module Engine
     attr_accessor :bankrupt
     attr_reader :name, :companies, :id, :history
 
-    def initialize(id, name)
+    def initialize(id, name, is_bot = false)
       @id = id
       @name = name
       @cash = 0
       @companies = []
       @history = []
+      @is_bot = is_bot
     end
 
     def value

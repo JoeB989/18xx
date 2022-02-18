@@ -48,6 +48,7 @@ module Engine
       when Hash
         title = data['title']
         names = data['players'].to_h { |p| [p['id'] || p['name'], p['name']] }
+        bots = data['bots']
         id = data['id']
         actions ||= data['actions'] || []
         pin ||= data.dig('settings', 'pin')
@@ -63,6 +64,7 @@ module Engine
       when ::Game
         title = data.title
         names = data.ordered_players.to_h { |u| [u.id, u.name] }
+        bots = data.bots
         id = data.id
         actions ||= data.actions.map(&:to_h)
         pin ||= data.settings['pin']
@@ -70,7 +72,7 @@ module Engine
       end
 
       Engine.game_by_title(title).new(
-        names, id: id, actions: actions, at_action: at_action, pin: pin, optional_rules: optional_rules, user: user, **kwargs
+        names, id: id, actions: actions, at_action: at_action, pin: pin, optional_rules: optional_rules, user: user, bots: bots, **kwargs
       )
     end
 
@@ -428,7 +430,7 @@ module Engine
         true
       end
 
-      def initialize(names, id: 0, actions: [], at_action: nil, pin: nil, strict: false, optional_rules: [], user: nil)
+      def initialize(names, id: 0, actions: [], at_action: nil, pin: nil, strict: false, optional_rules: [], user: nil, bots: [])
         @id = id
         @turn = 1
         @final_turn = nil
@@ -448,7 +450,11 @@ module Engine
                    names.to_h { |n| [n, n] }
                  end
 
-        @players = @names.map { |player_id, name| Player.new(player_id, name) }
+        @players = @names.map do |player_id, name|
+          is_bot = bots.include?(name)
+          name += ' (bot)' if is_bot
+          Player.new(player_id, name, is_bot)
+        end
         @user = user
         @programmed_actions = {}
         @round_counter = 0

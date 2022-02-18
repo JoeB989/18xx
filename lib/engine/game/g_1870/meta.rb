@@ -17,6 +17,13 @@ module Engine
         GAME_RULES_URL = 'http://www.hexagonia.com/rules/MFG_1870.pdf'
 
         PLAYER_RANGE = [2, 6].freeze
+        OPTIONAL_RULES = [
+          {
+            sym: :allow_bots,
+            short_name: 'Allow Bots in Hotseat',
+            desc: 'Players marked as Bot will auto-operate with as little human direction as possible',
+          },
+        ].freeze
       end
     end
   end

@@ -829,6 +829,10 @@ module Engine
         entity.runnable_trains
       end
 
+      def discarded_train_placement
+        self.class::DISCARDED_TRAINS
+      end
+
       # Before rusting, check if this train individual should rust.
       def rust?(train, purchased_train)
         train.rusts_on == purchased_train.sym ||
@@ -2691,7 +2695,7 @@ module Engine
         @round.steps.find do |step|
           # currently, abilities only care about Tracker, the is_a? check could
           # be expanded to a list of possible classes/modules when needed
-          step.is_a?(Step::Tracker) && !step.passed? && step.blocks?
+          step.is_a?(Step::Tracker) && !step.passed? && step.active? && step.blocks?
         end
       end
 

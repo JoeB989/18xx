@@ -16,16 +16,6 @@ module Engine
             super
           end
 
-          def hex_neighbors(entity, hex)
-            hexes = ability.hexes
-            return if hexes&.any? && !hexes&.include?(hex.id)
-
-            # When actually laying track entity will be the corp.
-            owner = entity.corporation? ? entity : entity.owner
-
-            @game.graph.connected_hexes(owner)[hex]
-          end
-
           def lay_tile(action, extra_cost: 0, entity: nil, spender: nil)
             tile = action.tile
             hex = action.hex
@@ -67,13 +57,13 @@ module Engine
             %i[green brown].include?(hex.tile.color) && !@game.active_metropolitan_hexes.include?(hex)
           end
 
-          def p26_available_hex(_entity, hex)
-            hex.tile.color == :white
+          def p26_available_hex(entity, hex)
+            hex.tile.color == :white && @game.home_hex_for(entity.owner) != hex
           end
 
           def p27_available_hex(_entity, hex)
             hex.tile.color == :white &&
-              (hex.tile.cities.empty? || hex.tile.cities.all? { |c| !c.tokens.empty? }) &&
+              (hex.tile.cities.empty? || hex.tile.cities.all? { |c| c.tokens.empty? }) &&
               (hex.neighbors.values & @game.active_metropolitan_hexes).empty?
           end
 

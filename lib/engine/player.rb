@@ -48,6 +48,10 @@ module Engine
       true
     end
 
+    def bot?
+      @is_bot
+    end
+
     def to_s
       "#{self.class.name} - #{@name}"
     end

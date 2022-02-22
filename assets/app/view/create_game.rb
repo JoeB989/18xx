@@ -371,18 +371,17 @@ module View
 
       players = []
       bots = []
-      is_bot = Hash.new
+      is_bot = {}
       game_params.each do |k, v|
-        if k.start_with?('player_')
-          name = v.gsub(/\s+/, ' ').strip
-          bot_key = 'is_bot_' + k[7,2]
-          if game_params[bot_key]
-            #name += ' (bot)'
-            bots << name 
-            is_bot[name] = true
-          end
-          players << name
+        next unless k.start_with?('player_')
+
+        name = v.gsub(/\s+/, ' ').strip
+        bot_key = 'is_bot_' + k[7, 2]
+        if game_params[bot_key]
+          bots << name
+          is_bot[name] = true
         end
+        players << name
       end
 
       return store(:flash_opts, 'Cannot have duplicate player names') if players.uniq.size != players.size

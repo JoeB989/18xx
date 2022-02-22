@@ -72,7 +72,8 @@ module Engine
       end
 
       Engine.game_by_title(title).new(
-        names, id: id, actions: actions, at_action: at_action, pin: pin, optional_rules: optional_rules, user: user, bots: bots, **kwargs
+        names, id: id, actions: actions, at_action: at_action, pin: pin, optional_rules: optional_rules, user: user,
+               bots: bots, **kwargs
       )
     end
 
@@ -450,11 +451,8 @@ module Engine
                    names.to_h { |n| [n, n] }
                  end
 
-        @players = @names.map do |player_id, name|
-          is_bot = bots.include?(name)
-          name += ' (bot)' if is_bot
-          Player.new(player_id, name, is_bot)
-        end
+        @bots = bots
+        @players = @names.map { |player_id, name| Player.new(player_id, name, bots&.include?(name)) }
         @user = user
         @programmed_actions = {}
         @round_counter = 0
@@ -810,7 +808,7 @@ module Engine
       end
 
       def clone(actions)
-        self.class.new(@names, id: @id, pin: @pin, actions: actions, optional_rules: @optional_rules)
+        self.class.new(@names, id: @id, pin: @pin, actions: actions, optional_rules: @optional_rules, bots: @bots)
       end
 
       def trains

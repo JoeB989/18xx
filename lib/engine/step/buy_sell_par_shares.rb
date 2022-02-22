@@ -321,6 +321,10 @@ module Engine
         programmed_auto_actions(entity)
       end
 
+      def bot_actions(_entity)
+        []
+      end
+
       def corporation_secure_percent
         # Most games 50% is fine, those where it's not (e.g. 1817) should subclass
         50

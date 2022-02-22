@@ -146,6 +146,10 @@ module Engine
         active_step(current_entity)&.auto_actions(current_entity)
       end
 
+      def bot_actions
+        active_step(current_entity)&.bot_actions(current_entity)
+      end
+
       def finished?
         !active_step
       end

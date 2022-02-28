@@ -85,7 +85,7 @@ module Engine
             sym: 'N',
             name: 'Neutral',
             logo: 'open_city',
-            simple_logo: 'open_city.alt',
+            simple_logo: 'open_city',
             tokens: [0, 0],
           )
           neutral.owner = @bank
@@ -98,8 +98,9 @@ module Engine
         def add_optional_train(type)
           proto = self.class::TRAINS.find { |e| e[:name] == type }
           index = @depot.trains.count { |t| t.name == type }
+          upcoming_index = @depot.upcoming.find_index { |t| t.name == type }
           new_train = Train.new(**proto, index: index)
-          @depot.insert_train(new_train)
+          @depot.insert_train(new_train, upcoming_index + index)
           update_cache(:trains)
         end
 
@@ -117,6 +118,10 @@ module Engine
 
         def exchange_for_partial_presidency?
           false
+        end
+
+        def available_programmed_actions
+          super << Action::ProgramAuctionBid
         end
 
         def operating_round(round_num)

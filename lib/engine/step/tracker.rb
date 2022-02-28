@@ -16,6 +16,7 @@ module Engine
 
       def setup
         @round.num_laid_track = 0
+        @round.num_upgraded_track = 0
         @round.upgraded_track = false
         @round.laid_hexes = []
       end
@@ -356,7 +357,7 @@ module Engine
         new_exits = tile.exits
         new_ctedges = tile.city_town_edges
         extra_cities = [0, new_ctedges.size - old_ctedges.size].max
-        multi_city_upgrade = new_ctedges.size > 1 && old_ctedges.size > 1
+        multi_city_upgrade = tile.cities.size > 1 && hex.tile.cities.size > 1
 
         new_exits.all? { |edge| hex.neighbors[edge] } &&
           !(new_exits & hex_neighbors(entity, hex)).empty? &&

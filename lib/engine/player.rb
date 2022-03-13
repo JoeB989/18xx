@@ -22,6 +22,7 @@ module Engine
       @companies = []
       @history = []
       @unsold_companies = []
+      @is_bot = is_bot
     end
 
     def value

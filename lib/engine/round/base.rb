@@ -192,6 +192,10 @@ module Engine
         false
       end
 
+      def unordered?
+        false
+      end
+
       def show_auto?
         false
       end

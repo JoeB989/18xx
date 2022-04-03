@@ -56,7 +56,9 @@ module View
           },
         }
 
-        h('div.player.title.nowrap', props, @player.name)
+        name = @player.name
+        name += ' (bot)' if @player.is_bot
+        h('div.player.title.nowrap', props, name)
       end
 
       def render_body

@@ -331,7 +331,10 @@ module Engine
         programmed_auto_actions(entity)
       end
 
-      def bot_actions(_entity)
+      def bot_actions(entity)
+        if entity.player? && entity.is_bot?
+          []
+        end
         []
       end
 

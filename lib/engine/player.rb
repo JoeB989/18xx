@@ -13,7 +13,7 @@ module Engine
     include Spender
 
     attr_accessor :bankrupt
-    attr_reader :name, :companies, :id, :history, :unsold_companies
+    attr_reader :name, :companies, :id, :history, :unsold_companies, :is_bot
 
     def initialize(id, name, is_bot = false)
       @id = id

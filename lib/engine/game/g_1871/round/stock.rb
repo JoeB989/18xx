@@ -16,6 +16,7 @@ module Engine
           SPLIT_PICK_PAR = 3
           SPLIT_PICK_TRAINS = 4
           SPLIT_PICK_MONEY = 5
+          SPLIT_PICK_HUNSLET = 6
 
           def setup
             @bank_bought = false
@@ -36,6 +37,7 @@ module Engine
 
           def split_start(corporation)
             @split_corporation = corporation
+            @split_branch = nil
             split_next
             @log << "#{current_entity.name} splitting #{@split_corporation.full_name}"
           end
@@ -48,7 +50,7 @@ module Engine
             case @split
             when SPLIT_PICK_BRANCH
               current_entity
-            when SPLIT_PICK_TOKENS, SPLIT_PICK_PAR, SPLIT_PICK_TRAINS, SPLIT_PICK_MONEY
+            when SPLIT_PICK_TOKENS, SPLIT_PICK_PAR, SPLIT_PICK_TRAINS, SPLIT_PICK_MONEY, SPLIT_PICK_HUNSLET
               @split_branch
             end
           end
@@ -76,6 +78,8 @@ module Engine
               trains
             when SPLIT_PICK_MONEY
               [0, @split_corporation.cash]
+            when SPLIT_PICK_HUNSLET
+              { yes: 'Yes', no: 'No' }
             end
           end
 
@@ -95,6 +99,8 @@ module Engine
               "Splitting #{@split_corporation.full_name} - Choosing Train Split"
             when SPLIT_PICK_MONEY
               "Splitting #{@split_corporation.full_name} - Choosing Cash Split"
+            when SPLIT_PICK_HUNSLET
+              "Splitting #{@split_corporation.full_name} - Choosing Hunslet Owner"
             end
           end
 
@@ -110,6 +116,8 @@ module Engine
               'Choose Trains'
             when SPLIT_PICK_MONEY
               'Choose Cash'
+            when SPLIT_PICK_HUNSLET
+              'Transferring Hunslet?'
             end
           end
 
@@ -117,6 +125,13 @@ module Engine
             @split_branch = branch
             @log << "#{current_entity.name} picked #{@split_branch.full_name} as the new company"
             split_next
+
+            # Now check if there is only one token choice, and just pick it if so
+            tokens = @game.split_token_choices(@split_corporation)
+            return unless tokens.size == 1
+
+            index = @split_corporation.tokens.find_index(tokens[0])
+            process_action(Engine::Action::Choose.new(current_entity, choice: index))
           end
 
           def split_pick_par(share_price)
@@ -139,6 +154,10 @@ module Engine
 
             @log << "#{@split_corporation.full_name} is out of tokens to swap"
             split_next
+
+            # if there is only one par choice, pick it
+            pars = @game.stock_market.par_prices
+            process_action(Engine::Action::Choose.new(current_entity, choice: pars[0].id)) if pars.size == 1
           end
 
           def split_pick_trains(train)
@@ -149,7 +168,7 @@ module Engine
 
             return unless @split_corporation.trains.empty?
 
-            @log << "#{@split_corporation} is out of trains to transfer"
+            @log << "#{@split_corporation.full_name} is out of trains to transfer"
             split_next
           end
 
@@ -157,7 +176,21 @@ module Engine
             @split_corporation.cash -= amount
             @split_branch.cash += amount
             @log << "#{@split_corporation.full_name} transfers #{@game.format_currency(amount)} to #{@split_branch.full_name}"
-            @log << 'Split completed'
+
+            # Skip the next step if we aren't dealing with the hunslet
+            split_next if @game.company_by_id('HSE').owner != @split_corporation
+
+            split_next
+          end
+
+          def split_pick_hunslet(do_transfer)
+            if do_transfer
+              @log << "#{current_entity.name} is transfering the Hunslet to #{@split_branch.full_name}"
+              hunslet = @game.company_by_id('HSE')
+              hunslet.owner = @split_branch
+              @split_corporation.companies.delete(hunslet)
+              @split_branch.companies << hunslet
+            end
             split_next
           end
 
@@ -193,14 +226,17 @@ module Engine
               end
 
               split_pick_money(amount)
+            when SPLIT_PICK_HUNSLET
+              split_pick_hunslet(choose.choice == 'yes')
             end
           end
 
           def split_next
             @split = (@split || 0) + 1
 
-            return unless @split > SPLIT_PICK_MONEY
+            return unless @split > SPLIT_PICK_HUNSLET
 
+            @log << 'Split completed'
             @split = SPLIT_NONE
             next_entity!
           end

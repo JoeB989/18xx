@@ -82,7 +82,10 @@ module Engine
             bank_company = @game.company_by_id('UB')
             cash += @game.union_bank.cash if entity == bank_company.owner
 
-            cash >= bundle.price && can_gain?(entity, bundle)
+            player_can_gain = can_gain?(entity, bundle)
+            bank_can_gain = entity == bank_company.owner ? can_gain?(@game.union_bank, bundle) : false
+
+            cash >= bundle.price && (player_can_gain || bank_can_gain)
           end
 
           # Since all shares start in the market we want to exclude any
@@ -111,6 +114,13 @@ module Engine
               !@round.players_sold[entity][corporation] &&
               (can_buy_multiple?(entity, corporation, bundle.owner) || !bought?) &&
               can_gain?(entity, bundle)
+          end
+
+          def can_gain?(entity, bundle, exchange: false)
+            return if !bundle || !entity
+            return true if exchange
+
+            super
           end
 
           def visible_corporations

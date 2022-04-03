@@ -85,7 +85,7 @@ module Engine
                     name: 'D',
                     on: 'D',
                     train_limit: 2,
-                    tiles: %i[yellow green brown],
+                    tiles: %i[yellow green brown gray],
                     operating_rounds: 3,
                   }].freeze
 
@@ -136,8 +136,6 @@ module Engine
         TR_SECOND_STARTING_TOKEN = 'H76'
         TOWN_TILE_SUBSIDY = 100
         T_TILE_SUBSIDY = 50
-
-        RESERVED_TILES = %w[J7 J14 J15].freeze
 
         DESTINATION_ABILITY_TYPES = %i[assign_hexes hex_bonus].freeze
 
@@ -269,13 +267,14 @@ module Engine
         end
 
         def upgrades_to?(from, to, _special = false, selected_company: nil)
-          if from.color == :green
-            return to.name == 'J7' if from.hex.name == 'D96'
-            return to.name == 'J14' if %w[E77 F94].include?(from.hex.name)
-            return to.name == 'J15' if from.hex.name == 'J88'
-          end
+          # Allow merging of two separate cities into one with two slots
+          return to.name == '611' if from.hex.coordinates == 'F92' && from.color == :green
 
-          return false if RESERVED_TILES.include?(to.name)
+          super
+        end
+
+        def upgrades_to_correct_label?(from, to)
+          return to.labels.empty? if from.label.to_s == 'KU' && from.color != :brown
 
           super
         end

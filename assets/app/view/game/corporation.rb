@@ -20,6 +20,7 @@ module View
       needs :display, default: 'inline-block'
       needs :selectable, default: true
       needs :interactive, default: true
+      needs :show_companies, default: true
 
       def render
         # use alternate view of corporation if needed
@@ -141,7 +142,7 @@ module View
         h('div.corp.card', { style: card_style, on: { click: select_corporation } }, children)
       end
 
-      def render_title
+      def render_title(bg = nil)
         title_row_props = {
           style: {
             grid: '1fr / auto 1fr auto',
@@ -162,6 +163,7 @@ module View
             borderRadius: '0.5rem',
           },
         }
+        logo_props[:style][:background] = bg if bg
         children = [h(:img, logo_props), h('div.title', @corporation.full_name)]
 
         if @corporation.system?
@@ -320,7 +322,7 @@ module View
             step&.last_acted_upon?(@corporation, entity),
             !@corporation.holding_ok?(entity, 1),
             entity.shares_of(@corporation).count(&:double_cert),
-            step.respond_to?(:share_flags) && step&.share_flags(entity.shares_of(@corporation)),
+            @game&.share_flags(entity.shares_of(@corporation)),
           ]
         end
 
@@ -413,8 +415,7 @@ module View
         if player_rows.any? || @corporation.num_market_shares.positive?
           at_limit = @game.share_pool.bank_at_limit?(@corporation)
           double_certs = @game.share_pool.shares_of(@corporation).count(&:double_cert)
-          step = @game.round.active_step
-          other_flags = step.respond_to?(:share_flags) && step&.share_flags(@game.share_pool.shares_of(@corporation))
+          other_flags = @game.share_flags(@game.share_pool.shares_of(@corporation))
 
           flags = (@corporation.receivership? ? '*' : '') + ('d' * double_certs) + (at_limit ? 'L' : '') + (other_flags || '')
 

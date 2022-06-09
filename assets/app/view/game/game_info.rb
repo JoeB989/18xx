@@ -18,9 +18,11 @@ module View
         @depot = @game.depot
         @dimmed_font_style = { style: { color: convert_hex_to_rgba(color_for(:font), 0.7) } }
 
+        return if @layout && @depot.trains.empty?
+
         case @layout
         when :discarded_trains
-          @depot.discarded.empty? ? '' : discarded_trains
+          @depot.discarded.empty? ? 'No Trains in Bank Pool' : discarded_trains
         when :upcoming_trains
           @game.train_power? ? power_summary : h(TrainSchedule, game: @game)
         else
@@ -29,9 +31,17 @@ module View
       end
 
       def render_body
-        children = @game.train_power? ? power : trains
-        children.concat(discarded_trains) if @depot.discarded.any?
-        children.concat(phases)
+        if @depot.trains.empty?
+          children = []
+        else
+          children = @game.train_power? ? power : trains
+          children.concat(discarded_trains)
+        end
+        if @game.phase_valid?
+          children.concat(phases)
+        else
+          children.concat(other_game_status)
+        end
         children.concat(timeline) if timeline
         children.concat(endgame)
         children << h(GameMeta, game: @game)
@@ -42,7 +52,7 @@ module View
 
         children = [h(:h3, 'Timeline')]
         children << progress_bar if @game.show_progress_bar?
-        @game.timeline.each { |line| children << h(:p, line) } if @game.timeline.any?
+        @game.timeline.each { |line| children << h(:p, line) } unless @game.timeline.empty?
 
         children
       end
@@ -73,7 +83,7 @@ module View
 
           extra = []
           extra << h(:td, phase[:corporation_sizes].join(', ')) if corporation_sizes
-          extra << h(:td, row_events) if phases_events.any?
+          extra << h(:td, row_events) unless phases_events.empty?
 
           tr_props = @game.phase.available?(phase[:name]) && phase != current_phase ? @dimmed_font_style : {}
 
@@ -94,7 +104,7 @@ module View
         extra = []
         extra << h(:th, 'New Corporation Size') if corporation_sizes
 
-        if status_text.any?
+        unless status_text.empty?
           status_text = [h(:table, { style: { marginTop: '0.3rem' } }, [
             h(:thead, [
               h(:tr, [
@@ -158,7 +168,7 @@ module View
       def trains
         rust_schedule, obsolete_schedule = rust_obsolete_schedule
 
-        show_obsolete_schedule = obsolete_schedule.keys.any?
+        show_obsolete_schedule = !obsolete_schedule.keys.empty?
         show_upgrade = @depot.upcoming.any?(&:discount)
         show_available = @depot.upcoming.any?(&:available_on)
         events = []
@@ -226,7 +236,7 @@ module View
 
           train_content << h(:td, discounts) if show_upgrade
           train_content << h(:td, train.available_on) if show_available
-          train_content << h(:td, event_text) if event_text.any?
+          train_content << h(:td, event_text) unless event_text.empty?
           tr_props = remaining.empty? ? @dimmed_font_style : {}
 
           h(:tr, tr_props, train_content)
@@ -237,7 +247,7 @@ module View
           h(:tr, [h('td.nowrap', { style: { maxWidth: '30vw' } }, desc[0]), h(:td, desc[1])])
         end
 
-        if event_text.any?
+        unless event_text.empty?
           event_text = [h(:table, { style: { marginTop: '0.3rem' } }, [
             h(:thead, [
               h(:tr, [
@@ -263,7 +273,7 @@ module View
                                      { attrs: { title: 'Available after purchase of first train of type' } },
                                      'Available')
         end
-        upcoming_train_header << h(:th, 'Events') if event_text.any?
+        upcoming_train_header << h(:th, 'Events') unless event_text.empty?
 
         [
           h(:h3, 'Trains'),
@@ -310,25 +320,29 @@ module View
       end
 
       def discarded_trains
-        rows = @depot.discarded.group_by(&:name).map do |_sym, trains|
-          train = trains.first
-          h(:tr, [
-            h(:td, train.name),
-            h(:td, @game.format_currency(train.price)),
-            h('td.right', trains.size),
+        if @depot.discarded.empty?
+          table = h(:p, { style: { padding: '0 0.3rem' } }, 'None')
+        else
+          rows = @depot.discarded.group_by(&:name).map do |_sym, trains|
+            train = trains.first
+            h(:tr, [
+              h(:td, train.name),
+              h(:td, @game.format_currency(train.price)),
+              h('td.right', trains.size),
+            ])
+          end
+
+          table = h(:table, [
+            h(:thead, [
+              h(:tr, [
+                h(:th, 'Type'),
+                h(:th, 'Price'),
+                h(:th, 'Available'),
+              ]),
+            ]),
+            h(:tbody, rows),
           ])
         end
-
-        table = h(:table, [
-          h(:thead, [
-            h(:tr, [
-              h(:th, 'Type'),
-              h(:th, 'Price'),
-              h(:th, 'Available'),
-            ]),
-          ]),
-          h(:tbody, rows),
-        ])
 
         if @layout == :discarded_trains
           h(:div, { style: { display: 'grid', justifyItems: 'center' } }, [
@@ -459,6 +473,176 @@ module View
           h(:div, "Current power cost: #{@game.format_currency(@game.current_power_cost)}"),
           h(:div, "Next power cost: #{@game.format_currency(@game.next_power_cost)}"),
         ])
+      end
+
+      # Currently, only for Rolling Stock
+      def other_game_status
+        status = []
+
+        unless @game.offering.empty?
+          status << h(:h3, 'Offering')
+          comps = @game.offering.map do |company|
+            h(Company, company: company)
+          end
+          status << h(:div, comps)
+        end
+
+        status << h(:h3, 'Remaining Deck')
+        if @game.company_deck.empty?
+          status << h(:div, '(Empty)')
+        else
+          deck = @game.company_deck.reverse.map do |company|
+            deck_item_style = {
+              display: 'inline-block',
+              backgroundColor: @game.company_colors(company)[0],
+              padding: '4px',
+              border: '1px solid black',
+              height: '20px',
+              margin: '4px',
+            }
+            h(:div, { style: deck_item_style })
+          end
+          status << h(:div, deck)
+        end
+
+        table_props = {
+          style: {
+            backgroundColor: 'white',
+            color: 'black',
+            margin: '0',
+            border: '1px solid',
+            borderCollapse: 'collapse',
+          },
+        }
+        tr_props = {
+          style: {
+            border: '1px solid black',
+          },
+        }
+        th_props = {
+          style: {
+            border: '1px solid black',
+          },
+        }
+
+        status << h(:h3, 'Current Cost of Ownership')
+
+        cost_card_props = {
+          style: {
+            display: 'inline-block',
+            backgroundColor: @game.class::STAR_COLORS[@game.cost_level]&.[](0) || 'white',
+            color: 'black',
+            padding: '20px 60px 20px 60px',
+            border: '1px solid',
+            borderRadius: '10px',
+          },
+        }
+
+        cost_rows = [h(:tr, tr_props, [h(:th, th_props, 'Level'), h(:th, th_props, 'Cost')])]
+        @game.cost_table[@game.cost_level].each_with_index do |cost, idx|
+          level_props = {
+            style: {
+              backgroundColor: @game.class::STAR_COLORS[idx + 1][0],
+              border: '1px solid',
+            },
+          }
+          td_props = {
+            style: {
+              border: '1px solid',
+            },
+          }
+          cost_rows << h(:tr, tr_props, [
+            h(:td, level_props, @game.level_symbol(idx + 1)),
+            h(:td, td_props, @game.format_currency(cost)),
+          ])
+        end
+        status << h(:div, cost_card_props, [
+          h(:table, table_props, [
+            h(:tbody, cost_rows),
+          ]),
+        ])
+
+        # show target book/stars for each share price
+        status << h(:h3, @game.share_card_description)
+        sorted_prices = @game.prices.keys.sort
+        share_cards = sorted_prices.map { |p| share_card(@game.prices[p]) }
+        status << h(:div, share_cards)
+
+        status
+      end
+
+      def share_card(price)
+        share_card_props = {
+          style: {
+            display: 'inline-block',
+            backgroundColor: 'white',
+            color: 'black',
+            border: '1px solid',
+            borderRadius: '5px',
+            padding: '5px',
+            margin: '0 0 5px 5px',
+          },
+        }
+
+        price_color = if price.price.zero?
+                        'red'
+                      elsif price.end_game_trigger?
+                        'darkgreen'
+                      else
+                        'black'
+                      end
+
+        price_props = {
+          style: {
+            display: 'inline-block',
+            color: price_color,
+            fontSize: '200%',
+            width: '50%',
+          },
+        }
+
+        max_div_props = {
+          style: {
+            display: 'inline-block',
+            backgroundColor: 'lightgray',
+            fontSize: '70%',
+            width: '30%',
+            margin: '0 0 0 0.5rem',
+          },
+        }
+
+        table_props = {
+          style: {
+            fontSize: '70%',
+          },
+        }
+
+        th_props = {
+          style: {
+            backgroundColor: 'lightgray',
+          },
+        }
+
+        children = []
+        price_info = []
+        price_info << h(:div, price_props, price.price)
+        price_info << h(:div, max_div_props, "Max Div: #{@game.format_currency((price.price / 3).to_i)}")
+        children << h(:div, price_info)
+
+        rows = [h(:tr, [h(:th, th_props, 'Shares'), h(:th, th_props, 'Target')])]
+        @game.share_card_array(price).each do |r|
+          rows << h(:tr, [
+            h(:td, r[0]),
+            h(:td, r[1]),
+          ])
+        end
+        children << h(:div, [
+          h(:table, table_props, [
+            h(:tbody, rows),
+          ]),
+        ])
+
+        h(:div, share_card_props, children)
       end
     end
   end

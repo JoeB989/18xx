@@ -17,27 +17,19 @@ module View
 
     def render_notification
       message = <<~MESSAGE
-
-        <p>21Moon is now beta.<br>
-        Simon Cutforth's, the designer of 1822, new prototype <a href='https://github.com/tobymao/18xx/wiki/1866'>1866</a>
-        is now available for alpha testing.<br>
-        18JP-T is now available for alpha testing.<br>
-        The Old Prince 1871 is now available for alpha testing.</p>
+        <p>1817 Volatility Expansion is now in alpha.</p>
+        <p>Rolling Stock and Rolling Stock Stars are now in beta.</p>
         <p>Learn how to get <a href='https://github.com/tobymao/18xx/wiki/Notifications'>notifications</a> by email, Slack, Discord, and Telegram.</p>
         <p>Please submit problem reports and make suggestions for improvements on
-        <a href='https://github.com/tobymao/18xx/issues'>GitHub</a>.</p>
+        <a href='https://github.com/tobymao/18xx/issues'>GitHub</a>. Join the
+        <a href='https://join.slack.com/t/18xxgames/shared_invite/zt-8ksy028m-CSZC~G5QtiFv60_jdqqulQ'>18xx Slack</a>.
+        to chat about 18xx and the website.
+        </p>
         <p>The <a href='https://github.com/tobymao/18xx/wiki'>18xx.games Wiki</a> has rules, maps,
         and other information about all the games, along with an FAQ.</p>
 
         <p>Support our publishers: #{Lib::Publisher.link_list.join}.</p>
         <p>You can support this project on <a href='https://www.patreon.com/18xxgames'>Patreon</a>.</p>
-
-        <p>Join the
-        <a href='https://join.slack.com/t/18xxgames/shared_invite/zt-8ksy028m-CSZC~G5QtiFv60_jdqqulQ'>18xx Slack</a>.
-        Chat about 18xx in the <a href='https://18xxgames.slack.com/archives/C68J3MK2A'>#general</a> channel.
-        Discussion of the 18xx.games site is in the
-        <a href='https://18xxgames.slack.com/archives/CV3R3HPUZ'>#18xxgames</a> channel and the developers can be
-        found in the <a href='https://18xxgames.slack.com/archives/C012K0CNY5C'>#18xxgamesdev</a> channel.</p>
       MESSAGE
 
       props = {

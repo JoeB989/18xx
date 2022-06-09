@@ -92,12 +92,8 @@ module Engine
         old_tile = hex.tile
         graph = @game.graph_for_entity(entity)
 
-        (@game.companies + @game.minors + @game.corporations).each do |company|
-          break if @game.loading
-          next if company.closed? || company == entity
-          next unless (ability = @game.abilities(company, :blocks_hexes))
-
-          raise GameError, "#{hex.id} is blocked by #{company.name}" if @game.hex_blocked_by_ability?(entity, ability, hex)
+        if !@game.loading && (blocking_ability = ability_blocking_hex(entity, hex))
+          raise GameError, "#{hex.id} is blocked by #{blocking_ability.owner.name}"
         end
 
         tile.rotate!(rotation)
@@ -117,6 +113,7 @@ module Engine
         if @game.class::IMPASSABLE_HEX_COLORS.include?(old_tile.color)
           hex.all_neighbors.each do |direction, neighbor|
             next if hex.tile.borders.any? { |border| border.edge == direction && border.type == :impassable }
+            next unless tile.exits.include?(direction)
 
             neighbor.neighbors[neighbor.neighbor_direction(hex)] = hex
             hex.neighbors[direction] = neighbor
@@ -330,7 +327,7 @@ module Engine
       def potential_tiles(entity, hex)
         colors = potential_tile_colors(entity, hex)
         @game.tiles
-          .select { |tile| @game.tile_color_valid_for_phase?(tile, phase_color_cache: colors) }
+          .select { |tile| @game.tile_valid_for_phase?(tile, hex: hex, phase_color_cache: colors) }
           .uniq(&:name)
           .select { |t| @game.upgrades_to?(hex.tile, t) }
           .reject(&:blocks_lay)
@@ -338,7 +335,7 @@ module Engine
 
       def upgradeable_tiles(entity, ui_hex)
         hex = @game.hex_by_id(ui_hex.id) # hex instance from UI can go stale
-        potential_tiles(entity, hex).map do |tile|
+        tiles = potential_tiles(entity, hex).map do |tile|
           tile.rotate!(0) # reset tile to no rotation since calculations are absolute
           tile.legal_rotations = legal_tile_rotations(entity, hex, tile)
           next if tile.legal_rotations.empty?
@@ -346,6 +343,16 @@ module Engine
           tile.rotate! # rotate it to the first legal rotation
           tile
         end.compact
+
+        if (!hex.tile.cities.empty? && @game.class::TILE_UPGRADES_MUST_USE_MAX_EXITS.include?(:cities)) ||
+          (hex.tile.cities.empty? && @game.class::TILE_UPGRADES_MUST_USE_MAX_EXITS.include?(:track))
+          tiles.group_by(&:color).flat_map do |_, group|
+            max_edges = group.map { |t| t.edges.size }.max
+            group.select { |t| t.edges.size == max_edges }
+          end
+        else
+          tiles
+        end
       end
 
       def legal_tile_rotation?(entity, hex, tile)
@@ -393,6 +400,17 @@ module Engine
         end
       end
 
+      def ability_blocking_hex(entity, hex)
+        (@game.companies + @game.minors + @game.corporations).each do |company|
+          next if company.closed? || company == entity
+          next unless (ability = @game.abilities(company, :blocks_hexes))
+
+          return ability if @game.hex_blocked_by_ability?(entity, ability, hex)
+        end
+
+        nil
+      end
+
       def tracker_available_hex(entity, hex)
         connected = hex_neighbors(entity, hex)
         return nil unless connected
@@ -404,6 +422,7 @@ module Engine
         return nil if color == :white && !tile_lay[:lay]
         return nil if color != :white && !tile_lay[:upgrade]
         return nil if color != :white && tile_lay[:cannot_reuse_same_hex] && @round.laid_hexes.include?(hex)
+        return nil if ability_blocking_hex(entity, hex)
 
         connected
       end

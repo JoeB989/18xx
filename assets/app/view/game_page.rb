@@ -4,6 +4,7 @@ require 'game_manager'
 require 'lib/connection'
 require 'lib/params'
 require 'lib/settings'
+require 'lib/storage'
 require_tree './game'
 
 module View
@@ -296,6 +297,7 @@ module View
         else
           color_for(:bg2)
         end
+
       nav_props = {
         attrs: {
           role: 'navigation',
@@ -308,7 +310,7 @@ module View
           top: '0',
           borderBottom: "1px solid #{color_for(:font2)}",
           borderTop: "1px solid #{color_for(:font2)}",
-          boxShadow: "0 5px 0 0 #{color_for(@game.phase.current[:tiles].last)}, 0 6px 0 0 #{color_for(:bg)}",
+          boxShadow: "0 5px 0 0 #{color_for(@game.nav_bar_color)}, 0 6px 0 0 #{color_for(:bg)}",
           backgroundColor: bg_color,
           color: active_player ? contrast_on(bg_color) : color_for(:font2),
           fontSize: 'large',
@@ -372,7 +374,7 @@ module View
     def render_round
       description = @game_data['mode'] == :hotseat ? '[HOTSEAT] ' : ''
       description += "#{@game.class.display_title}: "
-      description += "Phase #{@game.phase.name} - "
+      description += "#{@game.round_phase_string} - "
       name = @round.class.name.split(':').last
       description += @game.round_description(name)
       description += @game.finished ? ' - Game Over' : " - #{@round.description}"
@@ -408,6 +410,8 @@ module View
           h(Game::Round::Merger, game: @game)
         elsif current_entity_actions.include?('buy_shares') && @game.current_entity&.player?
           h(Game::Round::Stock, game: @game)
+        elsif current_entity_actions.include?('bid')
+          h(Game::Round::Auction, game: @game, user: @user)
         else
           h(Game::Round::Operating, game: @game)
         end
@@ -427,9 +431,13 @@ module View
         if @round.stock?
           h(Game::Round::Stock, game: @game)
         elsif @round.unordered?
-          h(Game::Round::Unordered, game: @game, user: @user, hotseat: @game_data[:mode] == :hotseat)
+          h(Game::Round::Unordered, game: @game, user: @user, hotseat: hotseat_or_master)
         end
       end
+    end
+
+    def hotseat_or_master
+      @game_data[:mode] == :hotseat || Lib::Storage[@game.id]&.dig('master_mode')
     end
 
     def render_game
@@ -442,7 +450,11 @@ module View
       children << h(Game::EntityOrder, round: @round)
       unless @game.finished
         children << h(Game::Abilities, user: @user, game: @game)
-        children << h(Game::Pass, actions: current_entity_actions)
+        children << if @game.round.unordered? && hotseat_or_master
+                      h(Game::MasterPass)
+                    else
+                      h(Game::Pass, actions: current_entity_actions)
+                    end
         children << h(Game::Help, game: @game)
       end
       children << render_action
@@ -453,7 +465,7 @@ module View
     def current_entity_actions
       @current_entity_actions ||= if !@game.round.unordered?
                                     @game.round.actions_for(@game.round.active_step&.current_entity) || []
-                                  elsif @game_data[:mode] == :hotseat
+                                  elsif hotseat_or_master
                                     @game.round.entities.flat_map { |e| @game.round.actions_for(e) }.uniq.compact
                                   else
                                     @game.round.actions_for(@game.player_by_id(@user['id'])) || []

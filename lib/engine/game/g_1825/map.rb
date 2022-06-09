@@ -7,6 +7,15 @@ module Engine
         LAYOUT = :pointy
 
         LOCATION_NAMES = {
+          # unit 4
+          # Inverness is moved to A5 in location_name in game.rb
+          'c8' => 'Wick',
+          'a2' => 'Ullapool',
+          'a4' => 'Dingwall',
+          'a6' => 'Invergordon',
+          'a8' => 'Elgin',
+          'a12' => 'Fraserburgh',
+          'B0' => 'Malaig',
           # unit 3
           'B8' => 'Inverness',
           'B12' => 'Aberdeen',
@@ -22,10 +31,13 @@ module Engine
           'F10' => 'Anstruther',
           'G3' => 'Greenock',
           'G5' => 'Glasgow',
-          'G7' => 'Coatbridge & Airdrie',
+          # G7 now handled in game.rb for variant DB3
           'G9' => 'Edinburgh & Leith',
+          'G13' => 'Berwick',
           'H4' => 'Kilmarnock & Ayr',
           'H6' => 'Motherwell',
+          'H10' => 'Galashiels',
+          'I13' => 'Morpeth & Blythe',
           'J2' => 'Stranraer',
           'J6' => 'Dumfries',
           'J10' => 'Carlisle',
@@ -487,24 +499,41 @@ module Engine
           },
           '200' => 2,
         }.freeze
+
+        DB1_UNIT3_ANTITILES = {
+          '14' => -1,
+          '15' => -1,
+        }.freeze
+
+        DB3_TILES = {
+          '58' => 1,
+          '206' => 1,
+        }.freeze
+
         # rubocop:enable Layout/LineLength
 
-        DIT_UPGRADES = {
+        # This includes upgrades for the DB1 kit tiles 887/888 and DB3 #206.
+        # Games without DB kits lack those tiles so are unaffected.
+        EXTRA_UPGRADES = {
           # gentle curve to three curves with a halt
           '8' => %w[11],
           # yellow double-dit to green K or X city
-          '1' => %w[14],
-          '2' => %w[15],
-          '55' => %w[14],
-          '56' => %w[15],
+          '1' => %w[14 888],
+          '2' => %w[15 887],
+          '55' => %w[14 888],
+          '56' => %w[15 887],
           '69' => %w[119],
-          '114' => %w[15],
+          '114' => %w[15 887],
           '198' => %w[119],
           '199' => %w[119],
+          '887' => %w[63 166],
+          '888' => %w[63 166],
           # yellow single-dit to green city (also brown/green city)
-          '3' => %w[12 14 15 119],
-          '4' => %w[14 15 119],
-          '58' => %w[12 13 14 15 119],
+          '3' => %w[12 14 15 119 206],
+          '4' => %w[14 15 119 206],
+          '58' => %w[12 13 14 15 119 206],
+          # not a dit at all but a yellow city, how exciting
+          '115' => '206',
           # HACK: for 119 (green/brown tile that upgrades to gray)
           '119' => %w[51],
         }.freeze
@@ -528,6 +557,13 @@ module Engine
             else
               gtiles[k] = v.dup
             end
+            number = gtiles[k].is_a?(Hash) ? gtiles[k]['count'] : gtiles[k]
+            # this was if number<=0 raise GameError ... end but rubocop gives
+            # a complaint that seems frankly barking to me
+            next if number.positive?
+            raise GameError, "negative number of tile #{k}" if number.negative?
+
+            gtiles.delete(k)
           end
         end
 
@@ -544,6 +580,18 @@ module Engine
           append_game_tiles(gtiles, K5_TILES) if @kits[5]
           append_game_tiles(gtiles, K6_TILES) if @kits[6]
           append_game_tiles(gtiles, D1_TILES) if @optional_rules.include?(:d1)
+          db1_tiles(gtiles) if @optional_rules.include?(:db1)
+          append_game_tiles(gtiles, DB3_TILES) if @optional_rules.include?(:db3)
+          gtiles
+        end
+
+        def db1_tiles(gtiles)
+          gtiles.delete('87')
+          gtiles.delete('88')
+          eightysevens = ((@units[1] ? 2 : 0) + (@units[3] ? 1 : 0))
+          gtiles['887'] = eightysevens
+          gtiles['888'] = eightysevens
+          append_game_tiles(gtiles, DB1_UNIT3_ANTITILES) if @units[3]
           gtiles
         end
 
@@ -704,7 +752,7 @@ module Engine
             ['E9'] => 'city=revenue:0;upgrade=cost:80,terrain:water',
             ['F4'] => 'town=revenue:0;upgrade=cost:140,terrain:mountain|water',
             ['F6'] => 'town=revenue:0',
-            ['F8'] => 'town=revenue:0town=revenue:0;upgrade=cost:120,terrain:water',
+            ['F8'] => 'town=revenue:0;town=revenue:0;upgrade=cost:120,terrain:water',
             ['G3'] => 'city=revenue:0',
             ['G7'] => 'town=revenue:0;town=revenue:0',
             ['H4'] => 'town=revenue:0;town=revenue:0',
@@ -731,6 +779,39 @@ module Engine
             ['F2'] => 'town=revenue:10,loc:4;path=a:4,b:_0;town=revenue:10,loc:1;path=a:5,b:_1',
             ['F10'] => 'town=revenue:10,loc:2;path=a:2,b:_0;path=a:5,b:0',
             ['K7'] => 'city=revenue:10,loc:3;path=a:3,b:_0;path=a:4,b:_0;path=a:5,b:_0',
+          },
+        }.freeze
+
+        UNIT4_HEXES = {
+          white: {
+            %w[b7
+               A7
+               A9
+               A11
+               A13
+               B4
+               B10
+               C1] => '',
+            %w[c6
+               b3
+               b5
+               A3
+               B2
+               B6
+               B8
+               C5] => 'upgrade=cost:100,terrain:mountain',
+            %w[c8
+               A5
+               B12] => 'city=revenue:0',
+            %w[a2
+               a4
+               a6
+               C3] => 'town=revenue:0',
+          },
+          sepia: {
+            %w[a8
+               a12] => 'town=revenue:10;path=a:0,b:_0;path=a:5,b:_0',
+            ['B0'] => 'town=revenue:10;path=a:4,b:_0;path=a:5,b:_0',
           },
         }.freeze
 
@@ -785,6 +866,25 @@ module Engine
           },
           sepia: {
             ['Q23'] => 'city=revenue:10;path=a:0,b:_0;path=a:4,b:_0;path=a:5,b:_0',
+          },
+        }.freeze
+
+        DB2_HEXES = {
+          white: {
+            ['W23'] => 'city=revenue:0',
+          },
+        }.freeze
+
+        DB3_HEXES = {
+          white: {
+            ['I9'] => '',
+            ['J6'] => 'town=revenue:0',
+            ['G13'] => 'city=revenue:0',
+            ['H10'] => 'town=revenue:0;upgrade=cost:100,terrain:mountain',
+            ['F4'] => 'town=revenue:0;border=edge:0,type:impassable;upgrade=cost:100,terrain:mountain',
+          },
+          sepia: {
+            ['F2'] => 'town=revenue:10,loc:4;path=a:4,b:_0;path=a:3,b:_0;town=revenue:10,loc:5;path=a:5,b:_1',
           },
         }.freeze
 
@@ -887,6 +987,9 @@ module Engine
 
         def game_hexes
           ghexes = {}
+          append_game_hexes(ghexes, DB2_HEXES) if @optional_rules.include?(:db2)
+          append_game_hexes(ghexes, DB3_HEXES) if @optional_rules.include?(:db3)
+          append_game_hexes(ghexes, UNIT4_HEXES) if @optional_rules.include?(:unit_4)
           append_game_hexes(ghexes, R1_HEXES) if @regionals[1]
           append_game_hexes(ghexes, R2_HEXES) if @regionals[2]
           append_game_hexes(ghexes, R3_HEXES) if @regionals[3]

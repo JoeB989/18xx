@@ -262,7 +262,7 @@ module Engine
       connection_data.each do |c|
         right = c[:right]
         cycles[c[:left]] = true
-        raise ReusesCity, "Cannot use #{right.hex.name} (#{right.inspect}) twice" if cycles[right]
+        raise ReusesCity, "Cannot use #{right.hex.name} twice" if cycles[right]
 
         cycles[right] = true
       end
@@ -391,6 +391,7 @@ module Engine
         chains_b.each do |b|
           next if (middle = (a[:nodes] & b[:nodes])).empty?
           next unless (b[:paths] & a[:paths]).empty?
+          next unless middle.one?
 
           left = (a[:nodes] - middle)[0]
           right = (b[:nodes] - middle)[0]
@@ -432,7 +433,7 @@ module Engine
 
     def compute_other_paths
       other_paths = @game.compute_other_paths(@routes, self)
-      @routes.each { |r| r.instance_variable_set('@paths', nil) }
+      @routes.each { |r| r.instance_variable_set(:@paths, nil) }
       other_paths
     end
 

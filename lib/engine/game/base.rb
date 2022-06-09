@@ -249,6 +249,12 @@ module Engine
       # :lawson Tile type like 1817, 1822
       TILE_TYPE = :normal
 
+      # Must an upgrade use the maximum number of exits
+      # for track and/or cities?
+      # :cities for cities, as in  #611 and #63 in 1822
+      # :track  for track, as in 18USA
+      TILE_UPGRADES_MUST_USE_MAX_EXITS = [].freeze
+
       TILE_COST = 0
 
       IMPASSABLE_HEX_COLORS = %i[blue gray red].freeze
@@ -516,7 +522,7 @@ module Engine
         @cities = (@hexes.map(&:tile) + @tiles).map(&:cities).flatten
 
         @phase = init_phase
-        @operating_rounds = @phase.operating_rounds
+        @operating_rounds = @phase&.operating_rounds
 
         @round_history = []
         setup_preround
@@ -1071,6 +1077,13 @@ module Engine
           stock_market.move_down(corporation) if was_president
         when :left_block_pres
           stock_market.move_left(corporation) if was_president
+        when :left_per_10_if_pres_else_left_one
+          spaces = if was_president
+                     ((bundle.percent - (swap ? swap.percent : 0)) / 10).round(0)
+                   else
+                     1
+                   end
+          spaces.times { @stock_market.move_left(corporation) }
         when :none
           nil
         else
@@ -1502,6 +1515,9 @@ module Engine
       end
 
       def upgrades_to_correct_label?(from, to)
+        # If the from tile has a future label and the to tile is the color for it use that, otherwise use the from's label
+        return from.future_label.label == to.label.to_s if from.future_label && to.color.to_s == from.future_label.color
+
         from.label == to.label
       end
 
@@ -1728,6 +1744,10 @@ module Engine
         'IPO Reserved'
       end
 
+      def share_flags(_shares)
+        nil
+      end
+
       def corporation_show_loans?(_corporation)
         true
       end
@@ -1812,10 +1832,13 @@ module Engine
         train.rusted = true
       end
 
+      def num_corp_trains(entity)
+        self.class::OBSOLETE_TRAINS_COUNT_FOR_LIMIT ? entity.trains.size : entity.trains.count { |t| !t.obsolete }
+      end
+
       def crowded_corps
         @crowded_corps ||= (minors + corporations).select do |c|
-          trains = self.class::OBSOLETE_TRAINS_COUNT_FOR_LIMIT ? c.trains.size : c.trains.count { |t| !t.obsolete }
-          trains > train_limit(c)
+          num_corp_trains(c) > train_limit(c)
         end
       end
 
@@ -1937,13 +1960,17 @@ module Engine
 
       def skip_route_track_type; end
 
-      def tile_color_valid_for_phase?(tile, phase_color_cache: nil)
+      def tile_valid_for_phase?(tile, hex: nil, phase_color_cache: nil)
         phase_color_cache ||= @phase.tiles
         phase_color_cache.include?(tile.color)
       end
 
       def token_owner(entity)
         entity&.company? ? entity.owner : entity
+      end
+
+      def company_header(_company)
+        'PRIVATE COMPANY'
       end
 
       private
@@ -2316,7 +2343,7 @@ module Engine
           bank: @bank.broken?,
           stock_market: @stock_market.max_reached?,
           final_train: @depot.empty?,
-          final_phase: @phase.phases.last == @phase.current,
+          final_phase: @phase&.phases&.last == @phase&.current,
           custom: custom_end_game_reached?,
         }.select { |_, t| t }
 
@@ -2539,7 +2566,7 @@ module Engine
       def all_potential_upgrades(tile, tile_manifest: false, selected_company: nil)
         colors = Array(@phase.phases.last[:tiles])
         @all_tiles
-          .select { |t| tile_color_valid_for_phase?(t, phase_color_cache: colors) }
+          .select { |t| tile_valid_for_phase?(t, phase_color_cache: colors) }
           .uniq(&:name)
           .select { |t| upgrades_to?(tile, t, selected_company: selected_company) }
           .reject(&:blocks_lay)
@@ -2721,10 +2748,11 @@ module Engine
       end
 
       def ability_blocking_step
+        supported_steps = [Step::Tracker, Step::BuyTrain]
         @round.steps.find do |step|
-          # currently, abilities only care about Tracker, the is_a? check could
-          # be expanded to a list of possible classes/modules when needed
-          step.is_a?(Step::Tracker) && !step.passed? && step.active? && step.blocks?
+          # currently, abilities only care about Tracker and BuyTrain. The is_a?
+          # check can be expanded to include more classes/modules when needed
+          supported_steps.any? { |s| step.is_a?(s) } && !step.passed? && step.active? && step.blocks?
         end
       end
 
@@ -2821,6 +2849,30 @@ module Engine
       # See https://github.com/tobymao/18xx/issues/7169
       def train_actions_always_use_operating_round_view?
         false
+      end
+
+      def nav_bar_color
+        @phase.current[:tiles].last
+      end
+
+      def round_phase_string
+        "Phase #{@phase.name}"
+      end
+
+      def phase_valid?
+        true
+      end
+
+      def market_par_bars(_price)
+        []
+      end
+
+      def show_player_percent?(_player)
+        true
+      end
+
+      def companies_sort(companies)
+        companies
       end
     end
   end

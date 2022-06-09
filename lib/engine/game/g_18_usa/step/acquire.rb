@@ -10,22 +10,33 @@ module Engine
           include ScrapTrainModule
           def actions(entity)
             actions = super
-            return actions if actions.empty?
-
-            actions << 'scrap_train' if entity == @buyer && can_scrap_train?(entity)
+            if entity == @buyer && can_scrap_train?(entity)
+              actions << 'pass' if actions.empty?
+              actions << 'scrap_train'
+            end
             actions
           end
 
           def pass_description
-            return 'Pass (Scrap Train)' if @buyer && !can_take_loan?(@buyer) && !can_payoff?(@buyer)
+            return 'Pass (Scrap Pullman)' if @buyer && !can_take_loan?(@buyer) && !can_payoff?(@buyer)
 
             super
           end
 
+          def process_acquire(buyer)
+            @passed_scrap_trains = false
+            super
+          end
+
+          def process_scrap_train(action)
+            super
+            acquire_post_loan if @buyer && !can_take_loan?(@buyer)
+          end
+
           def process_pass(action)
-            if @buyer && !can_take_loan?(@buyer) && !can_payoff?(@buyer)
-              @passed_scrap_trains = true
-              @game.log << "#{@buyer.name} passes scrapping trains"
+            @passed_scrap_trains = true if @buyer
+            if @buyer && !can_take_loan?(@buyer)
+              @game.log << "#{@buyer.name} passes scrapping pullman"
               acquire_post_loan
             else
               super
@@ -33,7 +44,8 @@ module Engine
           end
 
           def acquire_post_loan
-            return if can_scrap_train?(@buyer)
+            # Handled by discard train step if over the train limit
+            return if can_scrap_train?(@buyer) && @game.num_corp_trains(@buyer) <= @game.train_limit(@buyer)
 
             super
           end

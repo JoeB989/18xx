@@ -104,7 +104,7 @@ module Engine
 
       @game.hexes.each do |hex|
         hex.tile.cities.each do |city|
-          next unless city.tokened_by?(corporation)
+          next unless @game.city_tokened_by?(city, corporation)
           next if @check_tokens && @game.skip_token?(self, corporation, city)
 
           hex.neighbors.each { |e, _| hexes[hex][e] = true }
@@ -115,9 +115,11 @@ module Engine
       if @home_as_token
         home_hexes = Array(corporation.coordinates).map { |h| @game.hex_by_id(h) }
         home_hexes.each do |hex|
-          hex.tile.city_towns.each do |ct|
-            hex.neighbors.each { |e, _| hexes[hex][e] = true }
-            nodes[ct] = true
+          hex.neighbors.each { |e, _| hexes[hex][e] = true }
+          if corporation.city
+            Array(corporation.city).map { |c_idx| hex.tile.cities[c_idx] }.compact.each { |c| nodes[c] = true }
+          else
+            hex.tile.city_towns.each { |ct| nodes[ct] = true }
           end
         end
       end
@@ -160,7 +162,7 @@ module Engine
         local_nodes = {}
 
         node.walk(visited: visited, corporation: walk_corporation, skip_track: @skip_track,
-                  skip_paths: skip_paths, tile_type: @game.class::TILE_TYPE) do |path, _, _|
+                  skip_paths: skip_paths, converging_path: false) do |path, _, _|
           next if paths[path]
 
           paths[path] = true
@@ -203,6 +205,10 @@ module Engine
 
       hexes.default = nil
       hexes.transform_values!(&:keys)
+
+      # connected_hexes - hexes in which this corporation can lay track
+      # connected_nodes - hexes in which this corporation can token
+      # reachable_hexes - hexes in which this corporation can run
 
       @routes[corporation] = routes
       @connected_hexes[corporation] = hexes

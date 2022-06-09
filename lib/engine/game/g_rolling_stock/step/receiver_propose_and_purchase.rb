@@ -52,12 +52,13 @@ module Engine
 
           def add_next_receiver_offer
             while (prop = create_receiver_offer)
+              price = foreign_price(prop[:corporation], prop[:company])
               if prop[:responder_list].empty?
-                acquire_company(prop[:corporation], prop[:company], prop[:price])
+                acquire_company(prop[:corporation], prop[:company], price)
               else
                 @round.offers << prop
                 @log << "#{prop[:corporation].name} (Receivership) proposes to purchase #{prop[:company].sym} from the "\
-                        "Foreign Investor for #{@game.format_currency(prop[:price])}"
+                        "Foreign Investor for #{@game.format_currency(price)}"
                 @log << "#{prop[:responder_list][0].name} (#{prop[:responder].name}) has right of first refusal"
 
                 break
@@ -69,23 +70,31 @@ module Engine
             receiver, company = elegible_receiver_and_company
             return unless receiver
 
-            responder_list = build_responder_list(nil, receiver, company.max_price)
+            responder_list = build_responder_list(nil, receiver, company)
+            raise GameError, "no possible responders for #{company.sym}" if responder_list.empty?
+
+            price = foreign_price(receiver, company)
+            if responder_list.one?
+              # either receiver is OS, or receiver has highest share price of corps that can afford company
+              raise GameError, 'Receiver not in responder_list' unless responder_list[0] == receiver
+
+              acquire_company(receiver, company, price)
+              return create_receiver_offer
+            end
 
             {
               proposer: nil,
               corporation: receiver,
               company: company,
-              price: company.max_price,
               responder: responder_list[0]&.owner,
               responder_list: responder_list,
             }
           end
 
           def elegible_receiver_and_company
-            # FIXME: Overseas Trading power
             @game.operating_order.select(&:receivership?).each do |candidate|
               @game.foreign_investor.companies.sort_by(&:value).reverse_each do |company|
-                return [candidate, company] if candidate.cash >= company.max_price
+                return [candidate, company] if candidate.cash >= foreign_price(candidate, company)
               end
             end
             [nil, nil]

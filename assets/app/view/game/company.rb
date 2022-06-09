@@ -3,12 +3,14 @@
 require 'lib/settings'
 require 'lib/truncate'
 require 'view/game/actionable'
+require 'view/game/alternate_companies'
 
 module View
   module Game
     class Company < Snabberb::Component
       include Actionable
       include Lib::Settings
+      include AlternateCompanies
 
       needs :company
       needs :bids, default: nil
@@ -78,6 +80,11 @@ module View
       end
 
       def render
+        # use alternate view of corporation if needed
+        if @game.respond_to?(:company_view) && (view = @game.company_view(@company))
+          return send("render_#{view}")
+        end
+
         if @layout == :table
           @hidden_divs = {}
           render_company_on_card(@company)
@@ -131,23 +138,24 @@ module View
           end
           props[:style][:display] = @display
 
-          header_text = @game.respond_to?(:company_header) ? @game.company_header(@company) : 'PRIVATE COMPANY'
           revenue_str = if @game.respond_to?(:company_revenue_str)
                           @game.company_revenue_str(@company)
-                        else
+                        elsif @company.revenue
                           @game.format_currency(@company.revenue)
+                        else
+                          ''
                         end
 
           company_name_str = @game.respond_to?(:company_size) ? "[#{@game.company_size(@company)}] " : ''
           company_name_str += @company.name
 
           children = [
-            h(:div, { style: header_style }, header_text),
+            h(:div, { style: header_style }, @game.company_header(@company)),
             h(:div, company_name_str),
             h(:div, { style: description_style }, @company.desc),
-            h(:div, { style: value_style }, "Value: #{@game.format_currency(@company.value)}"),
-            h(:div, { style: revenue_style }, "Revenue: #{revenue_str}"),
           ]
+          children << h(:div, { style: value_style }, "Value: #{@game.format_currency(@company.value)}") if @company.value
+          children << h(:div, { style: revenue_style }, "Revenue: #{revenue_str}") if @company.revenue
           children << render_bidders if @bids&.any?
 
           unless @company.discount.zero?

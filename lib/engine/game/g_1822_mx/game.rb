@@ -13,7 +13,7 @@ module Engine
         include G1822MX::Entities
         include G1822MX::Map
 
-        attr_accessor :ndem_acting_player, :number_ndem_shares
+        attr_accessor :ndem_acting_player, :number_ndem_shares, :ndem_state
 
         CERT_LIMIT = { 3 => 16, 4 => 13, 5 => 10 }.freeze
 
@@ -33,6 +33,8 @@ module Engine
           'IRM' => 3,
         }.freeze
 
+        STARTING_CASH = { 3 => 500, 4 => 375, 5 => 300 }.freeze
+
         STARTING_COMPANIES = %w[P1 P2 P3 P4 P5 P6 P7 P8 P9 P10 P11 P12 P13 P14 P15 P16 P17 P18
                                 C1 C2 C3 C4 C5 C6 C7 M1 M2 M3 M4 M5 M6 M7 M8 M9 M10 M11 M12 M13 M14 M15
                                 M16 M17 M18 M19 M20 M21 M22 M23 M24].freeze
@@ -43,11 +45,14 @@ module Engine
         CURRENCY_FORMAT_STR = '$%d'
 
         MARKET = [
-          %w[5 10 15 20 25 30 35 40 45 50px 60px 70px 80px 90px 100px 110 120 135 150 165 180 200 220 245 270 300 330 360 400 450
-             500 550 600e],
+          %w[5y 10y 15y 20y 25y 30y 35y 40y 45y 50p 60px 70px 80px 90px 100px 110 120 135 150 165 180 200 220 245 270 300 330
+             360 400 450 500 550 600e],
         ].freeze
 
+        SELL_MOVEMENT = :left_per_10_if_pres_else_left_one
         PRIVATE_TRAINS = %w[P1 P2 P3 P4 P5 P6].freeze
+        EXTRA_TRAINS = %w[2P P+ LP 3/2P].freeze
+        EXTRA_TRAIN_PERMANENTS = %w[2P LP 3/2P].freeze
         PRIVATE_CLOSE_AFTER_PASS = %w[P9].freeze
         PRIVATE_MAIL_CONTRACTS = %w[P14 P15].freeze
         PRIVATE_PHASE_REVENUE = %w[].freeze # Stub for 1822 specific code
@@ -77,6 +82,58 @@ module Engine
           'P18' => { acquire: %i[major], phase: 3 },
         }.freeze
 
+        COMPANY_SHORT_NAMES = {
+          'P1' => 'P1 (5-Train)',
+          'P2' => 'P2 (Permanent 2T)',
+          'P3' => 'P3 (Permanent 3/2T)',
+          'P4' => 'P4 (Permanent LT)',
+          'P5' => 'P5 (Pullman)',
+          'P6' => 'P6 (Pullman)',
+          'P7' => 'P7 (Double Cash)',
+          'P8' => 'P8 (Adv. Tile Lay)',
+          'P9' => 'P9 (Extra Tile Lay)',
+          'P10' => 'P10 (Builder Cubes)',
+          'P11' => 'P11 (Builder Cubes)',
+          'P12' => 'P12 (Remove Town)',
+          'P13' => 'P13 (Remove Town)',
+          'P14' => 'P14 (Mail Contract)',
+          'P15' => 'P15 (Mail Contract)',
+          'P16' => 'P16 (Stock Drop)',
+          'P17' => 'P17 (Small Port)',
+          'P18' => 'P18 (Large Port)',
+          'C1' => 'FCM',
+          'C2' => 'MC',
+          'C3' => 'CHP',
+          'C4' => 'FNM',
+          'C5' => 'MIR',
+          'C6' => 'FCP',
+          'C7' => 'IRM',
+          'M1' => '1',
+          'M2' => '2',
+          'M3' => '3',
+          'M4' => '4',
+          'M5' => '5',
+          'M6' => '6',
+          'M7' => '7',
+          'M8' => '8',
+          'M9' => '9',
+          'M10' => '10',
+          'M11' => '11',
+          'M12' => '12',
+          'M13' => '13',
+          'M14' => '14',
+          'M15' => '15',
+          'M16' => '16',
+          'M17' => '17',
+          'M18' => '18',
+          'M19' => '19',
+          'M20' => '20',
+          'M21' => '21',
+          'M22' => '22',
+          'M23' => '23',
+          'M24' => '24',
+        }.freeze
+
         def port_company?(entity)
           entity.id == 'P17' || entity.id == 'P18'
         end
@@ -87,6 +144,12 @@ module Engine
 
         BIDDING_BOX_START_PRIVATE = 'P1'
         BIDDING_BOX_START_MINOR = nil
+
+        DOUBLE_HEX = %w[L19 M22 M26].freeze
+
+        def init_graph
+          Graph.new(self, home_as_token: true)
+        end
 
         TRAINS = [
           {
@@ -169,6 +232,9 @@ module Engine
               {
                 'type' => 'phase_revenue',
               },
+              {
+                'type' => 'close_ndem',
+              },
             ],
           },
           {
@@ -229,24 +295,26 @@ module Engine
         UPGRADE_COST_L_TO_2_PHASE_2 = 80
 
         def operating_round(round_num)
-          G1822::Round::Operating.new(self, [
+          Engine::Round::Operating.new(self, [
             G1822::Step::PendingToken,
             G1822::Step::FirstTurnHousekeeping,
             Engine::Step::AcquireCompany,
-            G1822::Step::DiscardTrain,
+            G1822MX::Step::DiscardTrain,
             G1822MX::Step::SpecialChoose,
             G1822MX::Step::SpecialTrack,
             G1822::Step::SpecialToken,
             G1822MX::Step::Track,
             G1822::Step::DestinationToken,
-            G1822::Step::Token,
+            G1822MX::Step::Token,
             G1822MX::Step::Route,
             G1822MX::Step::Dividend,
             G1822::Step::BuyTrain,
-            G1822::Step::MinorAcquisition,
+            G1822MX::Step::MinorAcquisition,
             G1822::Step::PendingToken,
-            G1822::Step::DiscardTrain,
-            G1822::Step::IssueShares,
+            G1822MX::Step::DiscardTrain,
+            G1822MX::Step::IssueShares,
+            G1822MX::Step::CashOutNdem,
+            G1822MX::Step::AuctionNdemTokens,
           ], round_num: round_num)
         end
 
@@ -276,15 +344,6 @@ module Engine
           G1822MX::SharePool.new(self)
         end
 
-        def upgrades_to_correct_label?(from, to)
-          # If the previous hex is white with a 'T', allow upgrades to 5 or 6
-          if from.hex.tile.label.to_s == 'T' && from.hex.tile.color == :white
-            return true if to.name == '5'
-            return true if to.name == '6'
-          end
-          super
-        end
-
         def stock_round
           G1822MX::Round::Stock.new(self, [
             Engine::Step::DiscardTrain,
@@ -293,13 +352,12 @@ module Engine
         end
 
         def must_buy_train?(entity)
-          entity.trains.empty? && entity.id != 'NDEM'
+          entity.id != 'NDEM' && super
         end
 
         def sorted_corporations
           available_corporations = super
-          ndem = corporation_by_id('NDEM')
-          available_corporations << ndem
+          available_corporations << ndem unless available_corporations.include?(ndem)
           available_corporations
         end
 
@@ -313,24 +371,23 @@ module Engine
           @log << "-- #{company.sym} is removed from the game and replaced with NdeM"
 
           corporation = corporation_from_company(company)
-          ndem = corporation_by_id('NDEM')
 
           # Replace token
-          city = hex_by_id(corporation.coordinates).tile.cities[corporation.city]
+          city = hex_by_id(corporation.coordinates).tile.cities.find { |c| c.reserved_by?(corporation) }
           city.remove_reservation!(corporation)
-          city.place_token(ndem, ndem.find_token_by_type)
+          city.place_token(ndem, ndem.find_token_by_type, check_tokenable: false)
           graph.clear
 
           # Add a stock certificate
           new_share = Share.new(ndem, percent: 10, index: @number_ndem_shares)
           new_share.counts_for_limit = false
           @share_pool.transfer_shares(new_share.to_bundle, @share_pool, allow_president_change: false)
+          @_shares[new_share.id] = new_share
           @number_ndem_shares += 1
         end
 
         def setup_ndem
           @number_ndem_shares = 3
-          ndem = corporation_by_id('NDEM')
 
           # Make the NDEM shares not count against the cert limit and move them to the bank pool
           ndem.shares_by_corporation[ndem].each { |share| share.counts_for_limit = false }
@@ -352,23 +409,27 @@ module Engine
           ndem.ipoed = true
           ndem.owner = @share_pool # Not clear this is needed
           after_par(ndem) # Not clear this is needed
+
+          @ndem_state = :open
+
+          n = ndem
+          def n.counts_for_limit
+            false
+          end
         end
 
         def send_train_to_ndem(train)
-          depot.remove_train(train)
-          ndem = corporation_by_id('NDEM')
-          phase.next! while phase.next_on.include?(train.sym) # Also trigger events
-          train.events.each do |event|
-            send("event_#{event['type']}!")
-          end
-          train.events.clear
           if train.name == 'L' && phase.name == '2'
             train.variant = '2'
             @log << 'L Train given to NDEM is flipped to a 2 Train'
           end
-          ndem.trains.shift while ndem.trains.length >= phase.train_limit(ndem)
-          train.owner = ndem
-          ndem.trains << train
+
+          buy_train(ndem, train, :free)
+          phase.buying_train!(ndem, train)
+          while ndem.trains.length > phase.train_limit(ndem)
+            t = ndem.trains.shift
+            rust(t)
+          end
         end
 
         def setup
@@ -414,6 +475,11 @@ module Engine
           privates.delete(p1)
           privates.unshift(p1)
 
+          # Move Minor 18 to the end so that it's not in the initial auction
+          m18 = minors.find { |c| c.id == 'M18' }
+          minors.delete(m18)
+          minors.push(m18)
+
           # Clear and add the companies in the correct randomize order sorted by type
           @companies.clear
           @companies.concat(minors)
@@ -447,6 +513,15 @@ module Engine
         # Stubbed out because this game doesn't it, but base 22 does
         def company_tax_haven_payout(entity, per_share); end
 
+        def event_close_ndem!
+          @log << '-- Event: Ndem privatizing --'
+          @ndem_state = :closing
+          return unless @round.is_a?(Engine::Round::Operating)
+
+          ndem = @round.entities.pop
+          @round.entities.insert(@round.entity_index + 1, ndem)
+        end
+
         def sell_shares_and_change_price(bundle, allow_president_change: true, swap: nil)
           return super unless bundle.corporation == corporation_by_id('NDEM')
 
@@ -456,11 +531,20 @@ module Engine
         def operating_order
           ndem, others = @corporations.select(&:floated?).sort.partition { |c| c.id == 'NDEM' }
           minors, majors = others.sort.partition { |c| c.type == :minor }
-          minors + majors + ndem
+          case @ndem_state
+          when :closing
+            ndem + minors + majors
+          when :closed
+            minors + majors
+          else
+            minors + majors + ndem
+          end
         end
 
         def active_players
-          return [@ndem_acting_player] if @ndem_acting_player
+          if current_entity == ndem && @round.active_step.respond_to?(:ndem_acting_player)
+            return [@round.active_step.ndem_acting_player]
+          end
 
           super
         end
@@ -517,7 +601,7 @@ module Engine
           on_acquired_train(company, entity) if self.class::PRIVATE_TRAINS.include?(company.id)
           adjust_p7_revenue(company) if company.id == 'P7'
           company.revenue = -10 if company.id == 'P16'
-          company.revenue = 0 if cube_company?(company)
+          company.revenue = 0 if cube_company?(company) || self.class::PRIVATE_MAIL_CONTRACTS.include?(company.id)
         end
 
         def reorder_players(_order = nil)
@@ -546,6 +630,14 @@ module Engine
           entity.id == 'P8'
         end
 
+        def must_be_on_terrain?(_entity)
+          false
+        end
+
+        def home_token_counts_as_tile_lay?(_entity)
+          false
+        end
+
         def company_ability_extra_track?(company)
           company.id == 'P9' || company.id == 'P17' || company.id == 'P18'
         end
@@ -556,11 +648,11 @@ module Engine
 
         def revenue_for(route, stops)
           revenue = super
-          route.train.name == '3/2P' ? (revenue / 2).round(-1) : revenue
+          route.train.name.start_with?('3/2P') ? (revenue / 2).round(-1) : revenue
         end
 
         def upgrades_to?(from, to, special = false, selected_company: nil)
-          return true if from.color == 'blue' && to.color == 'blue'
+          return true if from.color == :blue && to.color == :blue
 
           super
         end
@@ -590,8 +682,11 @@ module Engine
           company.close!
         end
 
-        def company_status_str
-          ''
+        def company_status_str(company)
+          index = bidbox_minors.index(company) || bidbox_concessions.index(company)
+          return "Bid box #{index + 1}" if index
+
+          nil
         end
 
         def terrain?(tile, terrain)
@@ -603,9 +698,9 @@ module Engine
 
         def max_builder_cubes(tile)
           max = 0
-          max += 2 if terrain?(tile, 'mountain')
-          max += 1 if terrain?(tile, 'hill')
-          max += 1 if terrain?(tile, 'river')
+          max += 2 if terrain?(tile, :mountain)
+          max += 1 if terrain?(tile, :hill)
+          max += 1 if terrain?(tile, :river)
           max
         end
 
@@ -621,16 +716,50 @@ module Engine
         def upgrade_cost(tile, hex, entity, spender)
           cost = super
           num_cubes = current_builder_cubes(tile)
-          if num_cubes >= 2 && terrain?(tile, 'mountain')
+          if num_cubes >= 2 && terrain?(tile, :mountain)
             num_cubes -= 2
             cost -= 80
-          end
-          if num_cubes >= 1 && terrain?(tile, 'hill')
+          elsif num_cubes >= 1 && terrain?(tile, :hill)
             num_cubes -= 1
             cost -= 40
           end
-          cost -= 20 if num_cubes >= 1 && terrain?(tile, 'river')
+          cost -= 20 if num_cubes >= 1 && terrain?(tile, :river)
           cost
+        end
+
+        def purchasable_companies(entity = nil)
+          return [] if entity && entity.id == 'NDEM'
+
+          super
+        end
+
+        def ndem
+          @ndem ||= corporation_by_id('NDEM')
+        end
+
+        def extra_train_pullman_count(corporation)
+          corporation.trains.count { |train| extra_train_pullman?(train) }
+        end
+
+        def extra_train_pullman?(train)
+          train.name == self.class::EXTRA_TRAIN_PULLMAN
+        end
+
+        def crowded_corps
+          @crowded_corps ||= corporations.select do |c|
+            trains = c.trains.count { |t| !extra_train?(t) }
+            crowded = trains > train_limit(c)
+            crowded |= extra_train_permanent_count(c) > 1
+            crowded |= extra_train_pullman_count(c) > 1
+            crowded
+          end
+        end
+
+        def finalize_end_game_values; end
+
+        def reduced_bundle_price_for_market_drop(bundle)
+          bundle.share_price = @stock_market.find_share_price(bundle.corporation, [:left] * bundle.num_shares).price
+          bundle
         end
       end
     end

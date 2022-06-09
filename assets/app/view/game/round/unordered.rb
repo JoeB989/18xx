@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'lib/settings'
+require 'lib/storage'
 require 'view/game/actionable'
 
 module View
@@ -42,7 +43,13 @@ module View
               border: '1px solid',
               borderRadius: '5px',
               marginBottom: '0.5rem',
-              padding: '0.2rem 0.5rem 0.2rem 0.5rem',
+              padding: '0.2rem 0.2rem 0.2rem 0.5rem',
+            },
+          }
+
+          buttons_props = {
+            style: {
+              display: 'inline-block',
             },
           }
 
@@ -71,9 +78,9 @@ module View
                 ))
               end
 
-              line << h(:div, [
-                h(:button, { on: { click: accept } }, 'Accept'),
-                h(:button, { on: { click: reject } }, 'Reject'),
+              line << h(:div, buttons_props, [
+                h(:button, { style: { margin: '0.1rem 0.1rem 0.1rem 0.2rem' }, on: { click: accept } }, 'Accept'),
+                h(:button, { style: { margin: '0.1rem 0.1rem 0.1rem 0.2rem' }, on: { click: reject } }, 'Reject'),
               ])
             else
               offer_props[:style][:background] = color_for(:bg2)
@@ -102,11 +109,11 @@ module View
 
           player_owned = @game.player_sort(@game.corporations.select(&:owner))
           children = players.map do |p|
-            companies = p.companies.map { |c| render_company(c) }
+            companies = @game.companies_sort(p.companies).map { |c| render_company(c) }
             corps = player_owned[p]&.map { |c| render_corporation(c) }
 
             h(:div, [
-              h(Player, player: p, game: @game),
+              h(Player, player: p, game: @game, show_companies: false),
               *companies,
               *corps,
             ])
@@ -150,8 +157,8 @@ module View
         end
 
         def render_corporation(corp)
-          subsidiaries = corp.companies.map { |c| render_company(c) }
-          h(:div, [h(Corporation, corporation: corp), *subsidiaries])
+          subsidiaries = @game.companies_sort(corp.companies).map { |c| render_company(c) }
+          h(:div, [h(Corporation, corporation: corp, show_companies: false), *subsidiaries])
         end
       end
     end

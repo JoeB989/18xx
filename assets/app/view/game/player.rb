@@ -19,6 +19,7 @@ module View
       needs :display, default: 'inline-block'
       needs :show_hidden, default: false
       needs :hide_logo, store: true, default: false
+      needs :show_companies, default: true
 
       def render
         card_style = {
@@ -32,8 +33,10 @@ module View
           render_body,
         ]
 
-        divs << h(Companies, owner: @player, game: @game, show_hidden: @show_hidden) if @player.companies.any? || @show_hidden
-        divs << h(UnsoldCompanies, owner: @player, game: @game) unless @player.unsold_companies.empty?
+        if @show_companies
+          divs << h(Companies, owner: @player, game: @game, show_hidden: @show_hidden) if @player.companies.any? || @show_hidden
+          divs << h(UnsoldCompanies, owner: @player, game: @game) unless @player.unsold_companies.empty?
+        end
 
         unless (minors = @game.player_card_minors(@player)).empty?
           divs << render_minors(minors)
@@ -43,11 +46,9 @@ module View
       end
 
       def render_title
-        bg_color = if setting_for(:show_player_colors, @game)
-                     player_colors(@game.players)[@player]
-                   else
-                     color_for(:bg2)
-                   end
+        bg_color = setting_for(:show_player_colors, @game) && player_colors(@game.players)[@player]
+        bg_color ||= color_for(:bg2)
+
         props = {
           style: {
             padding: '0.4rem',
@@ -229,10 +230,11 @@ module View
         children = []
         children << h('td.center', td_props, [h(:div, div_props, [h(:img, logo_props)])]) unless @hide_logo
 
+        show_percent = @game.show_player_percent?(@player)
         president_marker = corporation.president?(@player) ? '*' : ''
         double_markers = 'd' * shares.count(&:double_cert)
         children << h(:td, td_props, corporation.name + president_marker + double_markers)
-        children << h('td.right', td_props, "#{shares.sum(&:percent)}%")
+        children << h('td.right', td_props, show_percent ? "#{shares.sum(&:percent)}%" : shares.size.to_s)
         h('tr.row', children)
       end
 

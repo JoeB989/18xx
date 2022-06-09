@@ -62,6 +62,11 @@ module Engine
             from.color != :white && !(from.color == :yellow && from.preprinted)
           end
 
+          def protect_ns?(tile, hex, entity)
+            (tile.name == '888' || tile.name == '887') &&
+              (hex.id == 'Q13') && (entity.name != 'NS')
+          end
+
           # 1825: pre-printed yellows are not "upgraded"
           def lay_tile_action(action, entity: nil, spender: nil)
             tile = action.tile
@@ -74,6 +79,8 @@ module Engine
             if tile_lay[:cannot_reuse_same_hex] && @round.laid_hexes.include?(action.hex)
               raise GameError, "#{action.hex.id} cannot be layed as this hex was already layed on this turn"
             end
+
+            raise GameError, 'Only the NS can place tiles 887/888 on Q13' if protect_ns?(tile, action.hex, entity)
 
             check_adjacent(old_tile.hex) if @round.num_laid_track.positive?
 
@@ -178,7 +185,7 @@ module Engine
           end
 
           def legal_tile_rotation?(entity, hex, tile)
-            return super unless @game.force_dit_upgrade?(hex.tile, tile)
+            return super unless @game.force_upgrade?(hex.tile, tile)
 
             # basically a simplified version of the super except with a modified path check to allow dits to upgrade to cities
             return false unless @game.legal_tile_rotation?(entity, hex, tile)

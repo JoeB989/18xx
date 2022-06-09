@@ -54,6 +54,11 @@ module Engine
             players: [4, 5, 6, 7, 8, 9],
           },
           {
+            sym: :unit_4,
+            short_name: 'Unit 4',
+            desc: 'Unpublished Unit 4 map for the north of Scotland',
+          },
+          {
             sym: :r1,
             short_name: 'R1',
             desc: 'Regional Kit 1 - Wales',
@@ -71,7 +76,7 @@ module Engine
           {
             sym: :k1,
             short_name: 'K1',
-            desc: 'Extension Kit 1 - Suplementary Tiles',
+            desc: 'Extension Kit 1 - Supplementary Tiles',
           },
           {
             sym: :k2,
@@ -118,6 +123,21 @@ module Engine
             short_name: 'StrictBank',
             desc: 'Do not increase bank size based on number of minors and kits',
           },
+          {
+            sym: :db1,
+            short_name: 'DB1',
+            desc: 'Dave Berry variant 1: allow double-dits to upgrade to 887/888',
+          },
+          {
+            sym: :db2,
+            short_name: 'DB2',
+            desc: 'Dave Berry variant 2: SECR Changes for Unit 1',
+          },
+          {
+            sym: :db3,
+            short_name: 'DB3',
+            desc: 'Dave Berry variant 3: Unit 3 map revision',
+          },
         ].freeze
 
         MUTEX_RULES = [
@@ -150,6 +170,7 @@ module Engine
           units = {}
           kits = {}
           regionals = {}
+          units4 = false
 
           units[1] = true if optional_rules.include?(:unit_1)
           units[1] = true if optional_rules.include?(:unit_12)
@@ -163,6 +184,8 @@ module Engine
           units[3] = true if optional_rules.include?(:unit_3)
           units[3] = true if optional_rules.include?(:unit_23)
           units[3] = true if optional_rules.include?(:unit_123)
+
+          units4 = true if optional_rules.include?(:unit_4)
 
           kits[1] = true if optional_rules.include?(:k1)
           kits[2] = true if optional_rules.include?(:k2)
@@ -187,6 +210,10 @@ module Engine
           return 'Cannot use extra Unit 3 trains without Unit 3' if !units[3] && optional_rules.include?(:u3p)
           return 'Cannot use K1 or K6 with D1' if (kits[1] || kits[6]) && optional_rules.include?(:d1)
           return 'Cannot use both bank options' if optional_rules.include?(:big_bank) && optional_rules.include?(:strict_bank)
+          return 'Variant DB1 not useful in a Unit 2 only game' if !units[1] && !units[3] && optional_rules.include?(:db1)
+          return 'Variant DB2 is for Unit 1' if !units[1] && optional_rules.include?(:db2)
+          return 'Variant DB3 is for Unit 3' if !units[3] && optional_rules.include?(:db3)
+          return 'Unit 4 requires Unit 3' if units4 && !units[3]
 
           nil
         end

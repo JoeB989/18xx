@@ -9,6 +9,7 @@ module Engine
         class Dividend < Engine::Step::Base
           def actions(entity)
             return [] if !entity.corporation? || entity != current_entity
+            return [] if entity.receivership?
 
             %w[dividend]
           end
@@ -21,18 +22,23 @@ module Engine
             [:variable]
           end
 
+          def skip!
+            return super if !current_entity.corporation? || !current_entity.receivership?
+
+            process_dividend(Action::Dividend.new(current_entity, kind: 'variable', amount: 0))
+          end
+
           def process_dividend(action)
             entity = action.entity
             amount = action.amount
 
             raise GameError, "Illegal dividend amount #{amount}" unless amount <= @game.max_dividend_per_share(entity)
 
+            receiver = entity.receivership? ? ' (in receivership)' : ''
+            @log << "#{entity.name}#{receiver} pays #{@game.format_currency(amount)} per share"
             @game.players.each { |p| payout_player(entity, p, amount) }
             payout_market(entity, amount)
-
-            diff = @game.corporation_stars(entity, entity.cash) - @game.target_stars(entity)
-            new_price = @game.star_diff_price(entity, diff)
-            @game.move_to_price(entity, new_price)
+            @game.dividend_price_movement(entity)
 
             pass!
           end
@@ -47,7 +53,7 @@ module Engine
 
             corporation.spend(total, player)
             @log << "#{player.name} has #{num_shares} share#{num_shares > 1 ? 's' : ''} of #{corporation.name}"\
-                    " and recieves #{@game.format_currency(total)}"
+                    " and receives #{@game.format_currency(total)}"
           end
 
           def payout_market(corporation, amount)
@@ -59,13 +65,11 @@ module Engine
             total = num_shares * amount
             corporation.spend(total, @game.bank)
             @log << "The Market has #{num_shares} share#{num_shares > 1 ? 's' : ''} of #{corporation.name}"\
-                    " and recieves #{@game.format_currency(total)}"
+                    " and receives #{@game.format_currency(total)}"
           end
 
           def help_str(max)
-            "Dividend per share. Range: From #{@game.format_currency(0)}"\
-              " to #{@game.format_currency(max)}. Issued shares: #{@game.num_issued(current_entity)}."\
-              " Stars on share price: #{@game.target_stars(current_entity)}★"
+            @game.dividend_help_str(current_entity, max)
           end
 
           def variable_max

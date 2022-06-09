@@ -290,6 +290,226 @@ module View
           ]),
         ])
       end
+
+      def render_rs_corporation
+        @hidden_divs = {}
+
+        select_corporation = lambda do
+          if @selectable
+            selected_corporation = selected? ? nil : @corporation
+            store(:selected_corporation, selected_corporation)
+          end
+        end
+
+        card_style = {
+          cursor: 'pointer',
+        }
+
+        card_style[:display] = @display
+
+        unless @interactive
+          factor = color_for(:bg2).to_s[1].to_i(16) > 7 ? 0.3 : 0.6
+          card_style[:backgroundColor] = convert_hex_to_rgba(color_for(:bg2), factor)
+          card_style[:border] = '1px dashed'
+        end
+
+        card_style[:border] = '4px solid' if @game.round.can_act?(@corporation)
+
+        if selected?
+          card_style[:backgroundColor] = 'lightblue'
+          card_style[:color] = 'black'
+          card_style[:border] = '1px solid'
+        end
+
+        children = [render_title('white'), render_rs_holdings, render_shares]
+        children << render_rs_income if @corporation.ipoed
+
+        abilities_to_display = @corporation.all_abilities.select(&:description)
+        children << render_abilities(abilities_to_display) if abilities_to_display.any?
+
+        if @corporation.owner
+          props = {
+            style: {
+              grid: '1fr / repeat(2, max-content)',
+              justifyContent: 'center',
+              backgroundColor: color_for(:bg2),
+              color: color_for(:font2),
+            },
+          }
+
+          subchildren = render_operating_order
+          subchildren << render_revenue_history if @corporation.operating_history.any?
+          children << h(:div, props, subchildren)
+        end
+
+        # FIXME: delete status support if not used in Rolling Stock
+        status_props = {
+          style: {
+            justifyContent: 'center',
+            backgroundColor: color_for(:bg2),
+            color: color_for(:font2),
+          },
+        }
+        status_array_props = {
+          style: {
+            display: 'inline-block',
+            width: '100%',
+            textAlign: 'center',
+            backgroundColor: color_for(:bg2),
+            color: color_for(:font2),
+          },
+        }
+
+        item_props = {
+          style: {
+            display: 'inline-block',
+            padding: '0 0.5rem',
+          },
+        }
+
+        children << h(:div, status_props, @game.status_str(@corporation)) if @game.status_str(@corporation)
+        if @game.status_array(@corporation)
+          children << h(:div, status_array_props,
+                        @game.status_array(@corporation).map { |text, klass| h("div.#{klass}", item_props, text) })
+        end
+
+        if !@corporation.companies.empty? && @show_companies
+          children << h(Companies, owner: @corporation, game: @game, show_hidden: @show_hidden)
+        end
+
+        h('div.corp.card', { style: card_style, on: { click: select_corporation } }, children)
+      end
+
+      def render_rs_holdings
+        sym_props = {
+          attrs: {
+            title: 'Corporation Symbol',
+          },
+          style: {
+            fontSize: '1.5rem',
+            fontWeight: 'bold',
+          },
+        }
+
+        holdings_props = {
+          style: {
+            grid: '1fr / repeat(auto-fit, auto)',
+            gridAutoFlow: 'column',
+            gap: '0 0.5rem',
+            justifyContent: 'space-evenly',
+            justifySelf: 'normal',
+          },
+        }
+
+        holdings_row_props = {
+          style: {
+            grid: '1fr / max-content minmax(max-content, 1fr) minmax(4rem, max-content)',
+            gap: '0 0.5rem',
+            padding: '0.2rem 0.2rem 0.2rem 0.35rem',
+            backgroundColor: color_for(:bg2),
+            color: color_for(:font2),
+          },
+        }
+
+        holdings = if @corporation.ipoed
+                     h(:div, holdings_props, [render_rs_cash, render_rs_metric])
+                   else
+                     h(:div, holdings_props, 'Available to Form')
+                   end
+
+        h('div.corp__holdings', holdings_row_props, [
+          h(:div, sym_props, @corporation.name),
+          holdings,
+        ])
+      end
+
+      def render_rs_cash
+        round = @game.round
+        if round.respond_to?(:transacted_cash)
+          net_cash = @game.format_currency(@corporation.cash - round.transacted_cash[@corporation])
+          cash_str = "#{@game.format_currency(@corporation.cash)} (#{net_cash})"
+          render_header_segment(cash_str, 'Cash')
+        else
+          render_header_segment(@game.format_currency(@corporation.cash), 'Cash')
+        end
+      end
+
+      def render_rs_metric
+        if @game.respond_to?(:corporation_stars)
+          h('div.bold', [h('div.nowrap', "#{@game.corporation_stars(@corporation)}★")])
+        else
+          h('div.bold', [h('div.nowrap', "Book: #{@game.format_currency(@game.book_value(@corporation))}")])
+        end
+      end
+
+      def render_rs_income
+        section_props = {
+          style: {
+            display: 'grid',
+          },
+        }
+
+        income_props = {
+          style: {
+            fontSize: '80%',
+          },
+        }
+
+        row_props = {
+          style: {
+            height: '0',
+            lineHeight: '0',
+            margin: '0',
+            padding: '0',
+            border: '0',
+            borderSpacing: '0',
+          },
+        }
+
+        rows = []
+        rows << h(:tr, row_props, [h('td.left', 'Company Revenue:'),
+                                   h('td.right', @game.format_currency(@corporation.companies.sum(&:revenue)))])
+        rows << h(:tr, row_props, [h('td.left', 'Synergies:'),
+                                   h('td.right', @game.format_currency(@game.synergy_income(@corporation)))])
+        rows << h(:tr, row_props, [h('td.left', 'Cost of Ownership:'),
+                                   h('td.right',
+                                     @game.format_currency(@corporation.companies.sum { |c| @game.operating_cost(c) }))])
+        rows << if (extra = @game.ability_income(@corporation)).positive?
+                  h(:tr, row_props, [h('td.left', 'Ability Income:'), h('td.right', @game.format_currency(extra))])
+                else
+                  h(:tr, row_props, ['', ''])
+                end
+
+        income_table = h(:table, income_props, [
+          h(:thead, [
+            h(:tr, [h('th.left', 'Income'),
+                    h('th.right', @game.format_currency(@game.total_income(@corporation)))]),
+          ]),
+          h(:tbody, rows),
+        ])
+
+        movement_props = {
+          style: {
+            fontSize: '80%',
+          },
+        }
+
+        header, *lines = @game.movement_chart(@corporation)
+        rows = lines.map do |r|
+          h(:tr, row_props, [h('td.left', r[0]), h('td.right', r[1])])
+        end
+        movement_table = h(:table, movement_props, [
+          h(:thead, [
+            h(:tr, [h('th.left', header[0]), h('th.right', header[1])]),
+          ]),
+          h(:tbody, rows),
+        ])
+
+        h(:div, section_props, [
+          h(:div, { style: { gridColumnStart: 1 } }, [income_table]),
+          h(:div, { style: { gridColumnStart: 2 } }, [movement_table]),
+        ])
+      end
     end
   end
 end

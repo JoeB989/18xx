@@ -31,9 +31,13 @@ module View
           @selected_corporation ||= @step.selected_corporation if @step.respond_to?(:selected_corporation)
           @auctioning_corporation = @step.auctioning_corporation if @step.respond_to?(:auctioning_corporation)
           @selected_corporation ||= @auctioning_corporation
+          @auctioning_company = @step.auctioning_company if @step.respond_to?(:auctioning_company)
+          @selected_company ||= @auctioning_company
           @mergeable_entity = @step.mergeable_entity if @step.respond_to?(:mergeable_entity)
           @price_protection = @step.price_protection if @step.respond_to?(:price_protection)
           @selected_corporation ||= @price_protection&.corporation
+
+          @bank_first = @step.respond_to?(:bank_first?) && @step.bank_first?
 
           @current_entity = @step.current_entity
           if @last_player != @current_entity && !@auctioning_corporation
@@ -63,10 +67,11 @@ module View
           children.concat(render_buttons)
           children << h(SpecialBuy) if @current_actions.include?('special_buy')
           children.concat(render_failed_merge) if @current_actions.include?('failed_merge')
+          children.concat(render_bank_companies) if @bank_first
           children.concat(render_corporations)
           children.concat(render_mergeable_entities) if @current_actions.include?('merge')
           children.concat(render_player_companies) if @current_actions.include?('sell_company')
-          children.concat(render_bank_companies)
+          children.concat(render_bank_companies) unless @bank_first
           children << h(Players, game: @game)
           if @step.respond_to?(:purchasable_companies) && !@step.purchasable_companies(@current_entity).empty?
             children << h(BuyCompanyFromOtherPlayer, game: @game)
@@ -382,7 +387,7 @@ module View
             },
           }
           children << h(Tranches, game: @game) if @game.respond_to?(:tranches)
-          children << h(TrainSchedule, game: @game)
+          children << h(TrainSchedule, game: @game) unless @game.depot.trains.empty?
           h(:div, props, children)
         end
       end
